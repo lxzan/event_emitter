@@ -13,7 +13,7 @@
 ### Install
 
 ```bash
-go get -v github.com/lxzan/EventEmitter@latest
+go get -v github.com/lxzan/event_emitter@latest
 ```
 
 ### Usage
