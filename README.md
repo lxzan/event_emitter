@@ -2,13 +2,13 @@
 
 [![Build Status][1]][2] [![codecov][3]][4]
 
-[1]: https://github.com/lxzan/EventEmitter/actions/workflows/go.yml/badge.svg
+[1]: https://github.com/lxzan/event_emitter/actions/workflows/go.yml/badge.svg
 
-[2]: https://github.com/lxzan/EventEmitter/actions/workflows/go.yml
+[2]: https://github.com/lxzan/event_emitter/actions/workflows/go.yml
 
-[3]: https://codecov.io/gh/lxzan/EventEmitter/graph/badge.svg?token=WnGHinZwVR
+[3]: https://codecov.io/gh/lxzan/event_emitter/graph/badge.svg?token=WnGHinZwVR
 
-[4]: https://codecov.io/gh/lxzan/EventEmitter
+[4]: https://codecov.io/gh/lxzan/event_emitter
 
 ### Install
 
