@@ -2,9 +2,9 @@
 
 [![Build Status][1]][2] [![codecov][3]][4]
 
-[1]: https://github.com/lxzan/EventEmitter/workflows/Go%20Test/badge.svg?branch=main
+[1]: https://github.com/lxzan/EventEmitter/actions/workflows/go.yml/badge.svg
 
-[2]: https://github.com/lxzan/EventEmitter/actions?query=branch%3Amain
+[2]: https://github.com/lxzan/EventEmitter/actions/workflows/go.yml
 
 [3]: https://codecov.io/gh/lxzan/EventEmitter/graph/badge.svg?token=WnGHinZwVR
 
