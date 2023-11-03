@@ -105,23 +105,34 @@ func TestEventEmitter_Publish(t *testing.T) {
 }
 
 func TestEventEmitter_UnSubscribe(t *testing.T) {
-	var em = New(&Config{Concurrency: 1})
-	var suber1 = em.NewSubscriber()
-	em.Subscribe(suber1, "topic1", func(msg any) {
-		time.Sleep(100 * time.Millisecond)
-	})
-	em.Subscribe(suber1, "topic2", func(msg any) {
-		time.Sleep(100 * time.Millisecond)
-	})
-	em.Subscribe(suber1, "topic3", func(msg any) {
-		time.Sleep(100 * time.Millisecond)
-	})
-	assert.ElementsMatch(t, em.GetTopicsBySubId(suber1), []string{"topic1", "topic2", "topic3"})
-	em.UnSubscribe(suber1, "topic1")
-	assert.ElementsMatch(t, em.GetTopicsBySubId(suber1), []string{"topic2", "topic3"})
-	em.UnSubscribeAll(suber1)
-	assert.Zero(t, len(em.GetTopicsBySubId(suber1)))
+	t.Run("", func(t *testing.T) {
+		var em = New(&Config{Concurrency: 1})
+		var suber1 = em.NewSubscriber()
+		em.Subscribe(suber1, "topic1", func(msg any) {
+			time.Sleep(100 * time.Millisecond)
+		})
+		em.Subscribe(suber1, "topic2", func(msg any) {
+			time.Sleep(100 * time.Millisecond)
+		})
+		em.Subscribe(suber1, "topic3", func(msg any) {
+			time.Sleep(100 * time.Millisecond)
+		})
+		assert.ElementsMatch(t, em.GetTopicsBySubId(suber1), []string{"topic1", "topic2", "topic3"})
+		em.UnSubscribe(suber1, "topic1")
+		assert.ElementsMatch(t, em.GetTopicsBySubId(suber1), []string{"topic2", "topic3"})
+		em.UnSubscribeAll(suber1)
+		assert.Zero(t, len(em.GetTopicsBySubId(suber1)))
 
-	em.UnSubscribeAll(suber1)
-	assert.Zero(t, em.CountSubscriberByTopic("topic0"))
+		em.UnSubscribeAll(suber1)
+		assert.Zero(t, em.CountSubscriberByTopic("topic0"))
+	})
+
+	t.Run("", func(t *testing.T) {
+		var em = New(nil)
+		em.Subscribe(1, "chat", func(msg any) {})
+		em.Subscribe(2, "chat", func(msg any) {})
+		em.UnSubscribe(1, "chat")
+		_, exists := em.getBucketBySubId(1).Subscribers[1]
+		assert.False(t, exists)
+	})
 }

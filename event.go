@@ -85,7 +85,7 @@ func (c *EventEmitter) Publish(ctx context.Context, topic string, msg any) error
 	defer t.Unlock()
 
 	for _, v := range t.subs {
-		if err := t.emit(ctx, msg, v.cb); err != nil {
+		if err := t.Emit(ctx, msg, v.cb); err != nil {
 			return err
 		}
 	}
@@ -103,10 +103,16 @@ func (c *EventEmitter) Subscribe(subId int64, topic string, f func(msg any)) {
 // Cancel a subscribed topic
 func (c *EventEmitter) UnSubscribe(subId int64, topic string) {
 	if t, ok := c.getBucketByTopic(topic).getTopic(topic); ok {
-		t.delete(subId)
+		t.Delete(subId)
 	}
-	if s, ok := c.getBucketBySubId(subId).getSubscriber(subId); ok {
-		s.delete(topic)
+
+	b := c.getBucketBySubId(subId)
+	if s, ok := b.getSubscriber(subId); ok {
+		if s.Delete(topic) == 0 {
+			b.Lock()
+			delete(b.Subscribers, subId)
+			b.Unlock()
+		}
 	}
 }
 
@@ -153,7 +159,7 @@ func (c *bucket) addSubscriber(subId int64, topic string, f func(msg any)) *subs
 		}
 		c.Subscribers[subId] = sub
 	}
-	sub.add(topic)
+	sub.Add(topic)
 	return sub
 }
 
@@ -169,7 +175,7 @@ func (c *bucket) addTopic(topic string, sub *subscriberField, concurrency int64)
 		}
 		c.Topics[topic] = t
 	}
-	t.add(sub.subId, sub)
+	t.Add(sub.subId, sub)
 }
 
 func (c *bucket) getTopic(topic string) (*topicField, bool) {
