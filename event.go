@@ -85,8 +85,10 @@ func (c *EventEmitter) Publish(ctx context.Context, topic string, msg any) error
 	defer t.Unlock()
 
 	for _, v := range t.subs {
-		if err := t.Emit(ctx, msg, v.cb); err != nil {
-			return err
+		if cb, ok := v.topics[topic]; ok {
+			if err := t.Emit(ctx, msg, cb); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -154,12 +156,11 @@ func (c *bucket) addSubscriber(subId int64, topic string, f func(msg any)) *subs
 	if !ok {
 		sub = &subscriberField{
 			subId:  subId,
-			cb:     f,
-			topics: make(map[string]struct{}),
+			topics: make(map[string]eventCallback),
 		}
 		c.Subscribers[subId] = sub
 	}
-	sub.Add(topic)
+	sub.Add(topic, f)
 	return sub
 }
 

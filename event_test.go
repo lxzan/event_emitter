@@ -3,6 +3,7 @@ package event_emitter
 import (
 	"context"
 	"fmt"
+	"github.com/lxzan/event_emitter/internal/helper"
 	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
@@ -99,7 +100,49 @@ func TestEventEmitter_Publish(t *testing.T) {
 		wg.Wait()
 		for i := 0; i < count; i++ {
 			topic := fmt.Sprintf("topic%d", i)
-			assert.Equal(t, mapping[topic], count-i)
+			assert.Equal(t, mapping[topic], i+1)
+		}
+	})
+
+	t.Run("batch3", func(t *testing.T) {
+		var em = New(&Config{BucketNum: 1})
+		var count = 1000
+		var mapping1 = make(map[string]int)
+		var mapping2 = make(map[string]int)
+		var mu = &sync.Mutex{}
+		var subjects = make(map[string]uint8)
+		var wg = &sync.WaitGroup{}
+
+		for i := 0; i < count; i++ {
+			var topics []string
+			for j := 0; j < 100; j++ {
+				topic := fmt.Sprintf("topic-%d", helper.Numeric.Intn(count))
+				topics = append(topics, topic)
+			}
+
+			topics = helper.Uniq(topics)
+			wg.Add(len(topics))
+			for j, _ := range topics {
+				var topic = topics[j]
+				mapping1[topic]++
+				subjects[topic] = 1
+				em.Subscribe(int64(i), topic, func(msg any) {
+					mu.Lock()
+					mapping2[topic]++
+					mu.Unlock()
+					wg.Done()
+				})
+			}
+		}
+
+		for k, _ := range subjects {
+			var err = em.Publish(context.Background(), k, "hello")
+			assert.NoError(t, err)
+		}
+
+		wg.Wait()
+		for k, _ := range subjects {
+			assert.Equal(t, mapping1[k], mapping2[k])
 		}
 	})
 }

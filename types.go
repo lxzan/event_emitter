@@ -42,13 +42,12 @@ func (c *topicField) Emit(ctx context.Context, msg any, f func(any)) error {
 type subscriberField struct {
 	sync.Mutex
 	subId  int64
-	cb     eventCallback
-	topics map[string]struct{}
+	topics map[string]eventCallback
 }
 
-func (c *subscriberField) Add(k string) {
+func (c *subscriberField) Add(k string, cb eventCallback) {
 	c.Lock()
-	c.topics[k] = struct{}{}
+	c.topics[k] = cb
 	c.Unlock()
 }
 
