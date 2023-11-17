@@ -1,67 +1,22 @@
 package event_emitter
 
-import (
-	"context"
-	"sync"
-)
+type eventCallback[T Subscriber[T]] func(suber T, msg any)
 
-type eventCallback func(msg any)
-
-type topicField struct {
-	sync.Mutex
-	channel chan struct{}
-	subs    map[int64]*subscriberField
+type topicField[T Subscriber[T]] struct {
+	subs map[int64]*subscriberField[T]
 }
 
-func (c *topicField) Add(k int64, v *subscriberField) {
-	c.Lock()
-	c.subs[k] = v
-	c.Unlock()
+type subscriberField[T Subscriber[T]] struct {
+	suber  T
+	topics map[string]eventCallback[T]
 }
 
-func (c *topicField) Delete(k int64) {
-	c.Lock()
-	delete(c.subs, k)
-	c.Unlock()
+type Subscriber[T any] interface {
+	GetSubscribeID() int64
 }
 
-func (c *topicField) Emit(ctx context.Context, msg any, f func(any)) error {
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case c.channel <- struct{}{}:
-	}
+type Int64Subscriber int64
 
-	go func() {
-		f(msg)
-		<-c.channel
-	}()
-	return nil
-}
-
-type subscriberField struct {
-	sync.Mutex
-	subId  int64
-	topics map[string]eventCallback
-}
-
-func (c *subscriberField) Add(k string, cb eventCallback) {
-	c.Lock()
-	c.topics[k] = cb
-	c.Unlock()
-}
-
-func (c *subscriberField) Delete(k string) int {
-	c.Lock()
-	delete(c.topics, k)
-	n := len(c.topics)
-	c.Unlock()
-	return n
-}
-
-func (c *subscriberField) GetTopic(topic string) (cb eventCallback, exist bool) {
-	c.Lock()
-	cb, exist = c.topics[topic]
-	c.Unlock()
-	return
+func (c Int64Subscriber) GetSubscribeID() int64 {
+	return int64(c)
 }

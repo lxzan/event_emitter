@@ -22,27 +22,29 @@ go get -v github.com/lxzan/event_emitter@latest
 package main
 
 import (
-	"context"
 	"fmt"
 	"github.com/lxzan/event_emitter"
-	"time"
 )
 
 func main() {
-	var em = event_emitter.New(&event_emitter.Config{
-		BucketNum:   16,
-		BucketCap:   128,
-		Concurrency: 8,
+	var em = event_emitter.New[event_emitter.Int64Subscriber](&event_emitter.Config{
+		BucketNum:  16,
+		BucketSize: 128,
 	})
-	em.Subscribe(em.NewSubscriber(), "greet", func(msg any) {
-		fmt.Printf("recv: %v\n", msg)
+
+	var suber1 = em.NewSubscriber()
+	em.Subscribe(suber1, "greet", func(subscriber event_emitter.Int64Subscriber, msg any) {
+		fmt.Printf("recv0: %v\n", msg)
 	})
-	em.Subscribe(em.NewSubscriber(), "greet", func(msg any) {
-		fmt.Printf("recv: %v\n", msg)
+	em.Subscribe(suber1, "greet1", func(subscriber event_emitter.Int64Subscriber, msg any) {
+		fmt.Printf("recv1: %v\n", msg)
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	_ = em.Publish(ctx, "greet", "hello!")
-	time.Sleep(time.Second)
+
+	var suber2 = em.NewSubscriber()
+	em.Subscribe(suber2, "greet1", func(subscriber event_emitter.Int64Subscriber, msg any) {
+		fmt.Printf("recv2: %v\n", msg)
+	})
+
+	em.Publish("greet1", "hello!")
 }
 ```
