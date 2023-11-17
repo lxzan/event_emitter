@@ -85,7 +85,7 @@ func (c *EventEmitter) Publish(ctx context.Context, topic string, msg any) error
 	defer t.Unlock()
 
 	for _, v := range t.subs {
-		if cb, ok := v.topics[topic]; ok {
+		if cb, exist := v.GetTopic(topic); exist {
 			if err := t.Emit(ctx, msg, cb); err != nil {
 				return err
 			}

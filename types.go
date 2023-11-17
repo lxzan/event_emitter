@@ -58,3 +58,10 @@ func (c *subscriberField) Delete(k string) int {
 	c.Unlock()
 	return n
 }
+
+func (c *subscriberField) GetTopic(topic string) (cb eventCallback, exist bool) {
+	c.Lock()
+	cb, exist = c.topics[topic]
+	c.Unlock()
+	return
+}
