@@ -99,7 +99,7 @@ func TestEventEmitter_Publish(t *testing.T) {
 		wg.Wait()
 		for i := 0; i < count; i++ {
 			topic := fmt.Sprintf("topic%d", i)
-			assert.Equal(t, mapping[topic], count-i)
+			assert.Equal(t, mapping[topic], i+1)
 		}
 	})
 }
