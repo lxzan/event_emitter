@@ -1,238 +1,217 @@
 package event_emitter
 
 import (
-	"context"
-	"hash/maphash"
 	"sync"
 	"sync/atomic"
 )
 
 type Config struct {
-	BucketNum   int64 // 分片数 (number of slices)
-	BucketCap   int64 // 每个分片的初始化容量 (initialized capacity per slice)
-	Concurrency int64 // 每个主题的并发度 (Concurrency of each topic)
+	// 分片数
+	// Number of slices
+	BucketNum int64
+
+	// 每个分片的初始化容量, 根据订阅量估算, 默认为0.
+	// Initialization capacity of each slice, estimated from subscriptions, default 0.
+	BucketSize int64
 }
 
 func (c *Config) init() {
 	if c.BucketNum <= 0 {
 		c.BucketNum = 16
 	}
-	if c.BucketCap <= 0 {
-		c.BucketCap = 0
-	}
-	if c.Concurrency <= 0 {
-		c.Concurrency = 16
+	if c.BucketSize <= 0 {
+		c.BucketSize = 0
 	}
 	c.BucketNum = toBinaryNumber(c.BucketNum)
 }
 
-type EventEmitter struct {
+type EventEmitter[T Subscriber[T]] struct {
 	conf    Config
-	seed    maphash.Seed
 	serial  atomic.Int64
-	buckets []*bucket
+	buckets []*bucket[T]
 }
 
 // New 创建事件发射器实例
 // Creating an EventEmitter Instance
-func New(conf *Config) *EventEmitter {
+func New[T Subscriber[T]](conf *Config) *EventEmitter[T] {
 	if conf == nil {
 		conf = new(Config)
 	}
 	conf.init()
 
-	buckets := make([]*bucket, 0, conf.BucketNum)
+	buckets := make([]*bucket[T], 0, conf.BucketNum)
 	for i := int64(0); i < conf.BucketNum; i++ {
-		buckets = append(buckets, &bucket{
+		buckets = append(buckets, &bucket[T]{
 			Mutex:       sync.Mutex{},
-			Topics:      make(map[string]*topicField),
-			Subscribers: make(map[int64]*subscriberField, conf.BucketCap),
+			Topics:      make(map[string]*topicField[T]),
+			Subscribers: make(map[int64]*subscriberField[T], conf.BucketSize),
 		})
 	}
 
-	return &EventEmitter{
+	return &EventEmitter[T]{
 		conf:    *conf,
-		seed:    maphash.MakeSeed(),
 		buckets: buckets,
 	}
 }
 
-// NewSubscriber 获取订阅号
-// Get subscription number
-func (c *EventEmitter) NewSubscriber() (subId int64) {
-	return c.serial.Add(1)
+// NewSubscriber 生成订阅ID. 也可以使用自己的ID, 保证唯一即可.
+// Generate a subscription ID. You can also use your own ID, just make sure it's unique.
+func (c *EventEmitter[T]) NewSubscriber() Int64Subscriber {
+	return Int64Subscriber(c.serial.Add(1))
 }
 
-func (c *EventEmitter) getBucketByTopic(topic string) *bucket {
-	i := maphash.String(c.seed, topic) & uint64(c.conf.BucketNum-1)
-	return c.buckets[i]
-}
-
-func (c *EventEmitter) getBucketBySubId(subId int64) *bucket {
-	i := subId & (c.conf.BucketNum - 1)
+func (c *EventEmitter[T]) getBucket(suber T) *bucket[T] {
+	i := suber.GetSubscriberID() & (c.conf.BucketNum - 1)
 	return c.buckets[i]
 }
 
 // Publish 向主题发布消息
 // Publish a message to the topic
-func (c *EventEmitter) Publish(ctx context.Context, topic string, msg any) error {
-	t, ok := c.getBucketByTopic(topic).getTopic(topic)
-	if !ok {
-		return nil
+func (c *EventEmitter[T]) Publish(topic string, msg any) {
+	for _, b := range c.buckets {
+		b.publish(topic, msg)
 	}
-
-	t.Lock()
-	defer t.Unlock()
-
-	for _, v := range t.subs {
-		if cb, exist := v.GetTopic(topic); exist {
-			if err := t.Emit(ctx, msg, cb); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
-// Subscribe 订阅主题消息
-// Subscribe messages from the topic
-func (c *EventEmitter) Subscribe(subId int64, topic string, f func(msg any)) {
-	sub := c.getBucketBySubId(subId).addSubscriber(subId, topic, f)
-	c.getBucketByTopic(topic).addTopic(topic, sub, c.conf.Concurrency)
+// Subscribe 订阅主题消息. 注意: 回调函数必须是非阻塞的.
+// Subscribe messages from the topic. Note: Callback functions must be non-blocking.
+func (c *EventEmitter[T]) Subscribe(suber T, topic string, f func(subscriber T, msg any)) {
+	c.getBucket(suber).subscribe(suber, topic, f)
 }
 
-// UnSubscribe 取消一个订阅主题
+// UnSubscribe 取消订阅一个主题
 // Cancel a subscribed topic
-func (c *EventEmitter) UnSubscribe(subId int64, topic string) {
-	if t, ok := c.getBucketByTopic(topic).getTopic(topic); ok {
-		t.Delete(subId)
-	}
-
-	b := c.getBucketBySubId(subId)
-	if s, ok := b.getSubscriber(subId); ok {
-		if s.Delete(topic) == 0 {
-			b.Lock()
-			delete(b.Subscribers, subId)
-			b.Unlock()
-		}
-	}
+func (c *EventEmitter[T]) UnSubscribe(suber T, topic string) {
+	c.getBucket(suber).unSubscribe(suber, topic)
 }
 
-// UnSubscribeAll 取消所有订阅主题
+// UnSubscribeAll 取消订阅所有主题
 // Cancel all subscribed topics
-func (c *EventEmitter) UnSubscribeAll(subId int64) {
-	s, ok := c.getBucketBySubId(subId).deleteSubscriber(subId)
-	if !ok {
-		return
-	}
-	for k, _ := range s.topics {
-		c.UnSubscribe(subId, k)
-	}
+func (c *EventEmitter[T]) UnSubscribeAll(suber T) {
+	c.getBucket(suber).unSubscribeAll(suber)
 }
 
-// GetTopicsBySubId 通过订阅号获取主题列表
-// Get a list of topics by subscription
-func (c *EventEmitter) GetTopicsBySubId(subId int64) []string {
-	return c.getBucketBySubId(subId).getSubscriberTopics(subId)
+// GetTopicsBySubscriber 通过订阅者获取主题列表
+// Get a list of topics by subscriber
+func (c *EventEmitter[T]) GetTopicsBySubscriber(suber T) []string {
+	return c.getBucket(suber).getSubscriberTopics(suber)
 }
 
 // CountSubscriberByTopic 获取主题订阅人数
 // Get the number of subscribers to a topic
-func (c *EventEmitter) CountSubscriberByTopic(topic string) int {
-	return c.getBucketByTopic(topic).countTopicSubscriber(topic)
+func (c *EventEmitter[T]) CountSubscriberByTopic(topic string) int {
+	var sum = 0
+	for _, b := range c.buckets {
+		sum += b.countTopicSubscriber(topic)
+	}
+	return sum
 }
 
-type bucket struct {
+type bucket[T Subscriber[T]] struct {
 	sync.Mutex
-	Topics      map[string]*topicField
-	Subscribers map[int64]*subscriberField
+	Topics      map[string]*topicField[T]
+	Subscribers map[int64]*subscriberField[T]
 }
 
-func (c *bucket) addSubscriber(subId int64, topic string, f func(msg any)) *subscriberField {
+// 新增订阅
+func (c *bucket[T]) subscribe(suber T, topic string, f eventCallback[T]) {
 	c.Lock()
 	defer c.Unlock()
 
+	// 更新订阅
+	subId := suber.GetSubscriberID()
 	sub, ok := c.Subscribers[subId]
 	if !ok {
-		sub = &subscriberField{
-			subId:  subId,
-			topics: make(map[string]eventCallback),
-		}
-		c.Subscribers[subId] = sub
+		sub = &subscriberField[T]{topics: make(map[string]eventCallback[T])}
 	}
-	sub.Add(topic, f)
-	return sub
-}
+	sub.suber = suber
+	sub.topics[topic] = f
+	c.Subscribers[subId] = sub
 
-func (c *bucket) addTopic(topic string, sub *subscriberField, concurrency int64) {
-	c.Lock()
-	defer c.Unlock()
-
+	// 更新主题
 	t, ok := c.Topics[topic]
 	if !ok {
-		t = &topicField{
-			channel: make(chan struct{}, concurrency),
-			subs:    make(map[int64]*subscriberField),
-		}
-		c.Topics[topic] = t
+		t = &topicField[T]{subers: make(map[int64]*subscriberField[T])}
 	}
-	t.Add(sub.subId, sub)
+	t.subers[subId] = sub
+	c.Topics[topic] = t
 }
 
-func (c *bucket) getTopic(topic string) (*topicField, bool) {
+func (c *bucket[T]) publish(topic string, msg any) {
 	c.Lock()
 	defer c.Unlock()
-	v, exists := c.Topics[topic]
-	return v, exists
+
+	s, ok := c.Topics[topic]
+	if !ok {
+		return
+	}
+	for _, v := range s.subers {
+		if cb, exist := v.topics[topic]; exist {
+			cb(v.suber, msg)
+		}
+	}
 }
 
-func (c *bucket) getSubscriber(sudId int64) (*subscriberField, bool) {
+// 取消某个主题的订阅
+func (c *bucket[T]) unSubscribe(suber T, topic string) {
 	c.Lock()
 	defer c.Unlock()
-	v, exists := c.Subscribers[sudId]
-	return v, exists
+
+	subId := suber.GetSubscriberID()
+	v1, ok1 := c.Subscribers[subId]
+	if ok1 {
+		delete(v1.topics, topic)
+		if len(v1.topics) == 0 {
+			delete(c.Subscribers, subId)
+		}
+
+		if v2, ok2 := c.Topics[topic]; ok2 {
+			delete(v2.subers, subId)
+		}
+	}
 }
 
-func (c *bucket) getSubscriberTopics(sudId int64) []string {
+// 取消所有主题的订阅
+func (c *bucket[T]) unSubscribeAll(suber T) {
 	c.Lock()
 	defer c.Unlock()
-	v, exists := c.Subscribers[sudId]
+
+	subId := suber.GetSubscriberID()
+	v1, ok1 := c.Subscribers[subId]
+	if ok1 {
+		for topic, _ := range v1.topics {
+			if v2, ok2 := c.Topics[topic]; ok2 {
+				delete(v2.subers, subId)
+			}
+		}
+		delete(c.Subscribers, subId)
+	}
+}
+
+func (c *bucket[T]) getSubscriberTopics(suber T) []string {
+	c.Lock()
+	defer c.Unlock()
+
+	v, exists := c.Subscribers[suber.GetSubscriberID()]
 	if !exists {
 		return nil
 	}
-
 	var topics = make([]string, 0, len(v.topics))
-	v.Lock()
 	for k, _ := range v.topics {
 		topics = append(topics, k)
 	}
-	v.Unlock()
 	return topics
 }
 
-func (c *bucket) countTopicSubscriber(topic string) int {
+func (c *bucket[T]) countTopicSubscriber(topic string) int {
 	c.Lock()
 	defer c.Unlock()
+
 	v, exists := c.Topics[topic]
 	if !exists {
 		return 0
 	}
-
-	v.Lock()
-	n := len(v.subs)
-	v.Unlock()
-	return n
-}
-
-func (c *bucket) deleteSubscriber(sudId int64) (*subscriberField, bool) {
-	c.Lock()
-	defer c.Unlock()
-	v, exists := c.Subscribers[sudId]
-	if !exists {
-		return nil, false
-	}
-	delete(c.Subscribers, sudId)
-	return v, true
+	return len(v.subers)
 }
 
 func toBinaryNumber(n int64) int64 {
