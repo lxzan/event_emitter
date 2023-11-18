@@ -3,7 +3,7 @@ package event_emitter
 type eventCallback[T Subscriber[T]] func(suber T, msg any)
 
 type topicField[T Subscriber[T]] struct {
-	subs map[int64]*subscriberField[T]
+	subers map[int64]*subscriberField[T]
 }
 
 type subscriberField[T Subscriber[T]] struct {
@@ -12,11 +12,11 @@ type subscriberField[T Subscriber[T]] struct {
 }
 
 type Subscriber[T any] interface {
-	GetSubscribeID() int64
+	GetSubscriberID() int64 // 获取订阅者唯一ID
 }
 
 type Int64Subscriber int64
 
-func (c Int64Subscriber) GetSubscribeID() int64 {
+func (c Int64Subscriber) GetSubscriberID() int64 {
 	return int64(c)
 }

@@ -1,7 +1,6 @@
 package event_emitter
 
 import (
-	"hash/maphash"
 	"sync"
 	"sync/atomic"
 )
@@ -28,7 +27,6 @@ func (c *Config) init() {
 
 type EventEmitter[T Subscriber[T]] struct {
 	conf    Config
-	seed    maphash.Seed
 	serial  atomic.Int64
 	buckets []*bucket[T]
 }
@@ -52,7 +50,6 @@ func New[T Subscriber[T]](conf *Config) *EventEmitter[T] {
 
 	return &EventEmitter[T]{
 		conf:    *conf,
-		seed:    maphash.MakeSeed(),
 		buckets: buckets,
 	}
 }
@@ -64,7 +61,7 @@ func (c *EventEmitter[T]) NewSubscriber() Int64Subscriber {
 }
 
 func (c *EventEmitter[T]) getBucket(suber T) *bucket[T] {
-	i := suber.GetSubscribeID() & (c.conf.BucketNum - 1)
+	i := suber.GetSubscriberID() & (c.conf.BucketNum - 1)
 	return c.buckets[i]
 }
 
@@ -82,13 +79,13 @@ func (c *EventEmitter[T]) Subscribe(suber T, topic string, f func(subscriber T, 
 	c.getBucket(suber).subscribe(suber, topic, f)
 }
 
-// UnSubscribe 取消一个订阅主题
+// UnSubscribe 取消订阅一个主题
 // Cancel a subscribed topic
 func (c *EventEmitter[T]) UnSubscribe(suber T, topic string) {
 	c.getBucket(suber).unSubscribe(suber, topic)
 }
 
-// UnSubscribeAll 取消所有订阅主题
+// UnSubscribeAll 取消订阅所有主题
 // Cancel all subscribed topics
 func (c *EventEmitter[T]) UnSubscribeAll(suber T) {
 	c.getBucket(suber).unSubscribeAll(suber)
@@ -122,7 +119,7 @@ func (c *bucket[T]) subscribe(suber T, topic string, f eventCallback[T]) {
 	defer c.Unlock()
 
 	// 更新订阅
-	subId := suber.GetSubscribeID()
+	subId := suber.GetSubscriberID()
 	sub, ok := c.Subscribers[subId]
 	if !ok {
 		sub = &subscriberField[T]{topics: make(map[string]eventCallback[T])}
@@ -134,9 +131,9 @@ func (c *bucket[T]) subscribe(suber T, topic string, f eventCallback[T]) {
 	// 更新主题
 	t, ok := c.Topics[topic]
 	if !ok {
-		t = &topicField[T]{subs: make(map[int64]*subscriberField[T])}
+		t = &topicField[T]{subers: make(map[int64]*subscriberField[T])}
 	}
-	t.subs[subId] = sub
+	t.subers[subId] = sub
 	c.Topics[topic] = t
 }
 
@@ -148,7 +145,7 @@ func (c *bucket[T]) publish(topic string, msg any) {
 	if !ok {
 		return
 	}
-	for _, v := range s.subs {
+	for _, v := range s.subers {
 		if cb, exist := v.topics[topic]; exist {
 			cb(v.suber, msg)
 		}
@@ -160,7 +157,7 @@ func (c *bucket[T]) unSubscribe(suber T, topic string) {
 	c.Lock()
 	defer c.Unlock()
 
-	subId := suber.GetSubscribeID()
+	subId := suber.GetSubscriberID()
 	v1, ok1 := c.Subscribers[subId]
 	if ok1 {
 		delete(v1.topics, topic)
@@ -169,7 +166,7 @@ func (c *bucket[T]) unSubscribe(suber T, topic string) {
 		}
 
 		if v2, ok2 := c.Topics[topic]; ok2 {
-			delete(v2.subs, subId)
+			delete(v2.subers, subId)
 		}
 	}
 }
@@ -179,12 +176,12 @@ func (c *bucket[T]) unSubscribeAll(suber T) {
 	c.Lock()
 	defer c.Unlock()
 
-	subId := suber.GetSubscribeID()
+	subId := suber.GetSubscriberID()
 	v1, ok1 := c.Subscribers[subId]
 	if ok1 {
 		for topic, _ := range v1.topics {
 			if v2, ok2 := c.Topics[topic]; ok2 {
-				delete(v2.subs, subId)
+				delete(v2.subers, subId)
 			}
 		}
 		delete(c.Subscribers, subId)
@@ -195,7 +192,7 @@ func (c *bucket[T]) getSubscriberTopics(suber T) []string {
 	c.Lock()
 	defer c.Unlock()
 
-	v, exists := c.Subscribers[suber.GetSubscribeID()]
+	v, exists := c.Subscribers[suber.GetSubscriberID()]
 	if !exists {
 		return nil
 	}
@@ -214,7 +211,7 @@ func (c *bucket[T]) countTopicSubscriber(topic string) int {
 	if !exists {
 		return 0
 	}
-	return len(v.subs)
+	return len(v.subers)
 }
 
 func toBinaryNumber(n int64) int64 {

@@ -16,7 +16,7 @@
 go get -v github.com/lxzan/event_emitter@latest
 ```
 
-### Usage
+### Quick Start
 
 ```go
 package main
@@ -34,17 +34,47 @@ func main() {
 
 	var suber1 = em.NewSubscriber()
 	em.Subscribe(suber1, "greet", func(subscriber event_emitter.Int64Subscriber, msg any) {
-		fmt.Printf("recv0: %v\n", msg)
+		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
 	})
 	em.Subscribe(suber1, "greet1", func(subscriber event_emitter.Int64Subscriber, msg any) {
-		fmt.Printf("recv1: %v\n", msg)
+		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
 	})
 
 	var suber2 = em.NewSubscriber()
 	em.Subscribe(suber2, "greet1", func(subscriber event_emitter.Int64Subscriber, msg any) {
-		fmt.Printf("recv2: %v\n", msg)
+		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
 	})
 
 	em.Publish("greet1", "hello!")
+}
+```
+
+### GWS Broadcast
+
+```go
+package main
+
+import (
+	"github.com/lxzan/event_emitter"
+	"github.com/lxzan/gws"
+)
+
+type Socket struct{ *gws.Conn }
+
+func (c *Socket) GetSubscriberID() int64 {
+	userId, _ := c.Session().Load("userId")
+	return userId.(int64)
+}
+
+func Sub(em *event_emitter.EventEmitter[*Socket], topic string, socket *Socket) {
+	em.Subscribe(socket, topic, func(subscriber *Socket, msg any) {
+		_ = msg.(*gws.Broadcaster).Broadcast(subscriber.Conn)
+	})
+}
+
+func Pub(em *event_emitter.EventEmitter[*Socket], topic string, op gws.Opcode, msg []byte) {
+	var broadcaster = gws.NewBroadcaster(op, msg)
+	defer broadcaster.Close()
+	em.Publish(topic, broadcaster)
 }
 ```
