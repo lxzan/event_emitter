@@ -11,38 +11,38 @@ import (
 
 func TestEventEmitter_Publish(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		var em = New[Int64Subscriber](nil)
+		var em = New[Subscriber[any]](nil)
 		var wg = &sync.WaitGroup{}
 		wg.Add(2)
 
 		suber1 := em.NewSubscriber()
-		em.Subscribe(suber1, "test", func(subscriber Int64Subscriber, msg any) {
+		em.Subscribe(suber1, "test", func(subscriber Subscriber[any], msg any) {
 			t.Logf("id=%d, msg=%v\n", suber1, msg)
 			wg.Done()
 		})
-		em.Subscribe(suber1, "oh", func(subscriber Int64Subscriber, msg any) {})
+		em.Subscribe(suber1, "oh", func(subscriber Subscriber[any], msg any) {})
 
 		suber2 := em.NewSubscriber()
-		em.Subscribe(suber2, "test", func(subscriber Int64Subscriber, msg any) {
+		em.Subscribe(suber2, "test", func(subscriber Subscriber[any], msg any) {
 			t.Logf("id=%d, msg=%v\n", suber2, msg)
 			wg.Done()
 		})
 
 		em.Publish("test", "hello!")
 		assert.Equal(t, em.CountSubscriberByTopic("test"), 2)
-		assert.ElementsMatch(t, em.GetTopicsBySubscriber(1), []string{"test", "oh"})
-		assert.ElementsMatch(t, em.GetTopicsBySubscriber(2), []string{"test"})
+		assert.ElementsMatch(t, em.GetTopicsBySubscriber(suber1), []string{"test", "oh"})
+		assert.ElementsMatch(t, em.GetTopicsBySubscriber(suber2), []string{"test"})
 		em.Publish("", 1)
 		wg.Wait()
 	})
 
 	t.Run("timeout", func(t *testing.T) {
-		var em = New[Int64Subscriber](&Config{})
+		var em = New[Subscriber[any]](&Config{})
 		var suber1 = em.NewSubscriber()
-		em.Subscribe(suber1, "topic1", func(subscriber Int64Subscriber, msg any) {
+		em.Subscribe(suber1, "topic1", func(subscriber Subscriber[any], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
-		em.Subscribe(suber1, "topic2", func(subscriber Int64Subscriber, msg any) {
+		em.Subscribe(suber1, "topic2", func(subscriber Subscriber[any], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
 
@@ -52,13 +52,13 @@ func TestEventEmitter_Publish(t *testing.T) {
 	})
 
 	t.Run("batch1", func(t *testing.T) {
-		var em = New[Int64Subscriber](nil)
+		var em = New[Subscriber[any]](nil)
 		var count = 1000
 		var wg = &sync.WaitGroup{}
 		wg.Add(count)
 		for i := 0; i < count; i++ {
 			id := em.NewSubscriber()
-			em.Subscribe(id, "greet", func(subscriber Int64Subscriber, msg any) {
+			em.Subscribe(id, "greet", func(subscriber Subscriber[any], msg any) {
 				wg.Done()
 			})
 		}
@@ -67,17 +67,22 @@ func TestEventEmitter_Publish(t *testing.T) {
 	})
 
 	t.Run("batch2", func(t *testing.T) {
-		var em = New[Int64Subscriber](nil)
+		var em = New[Subscriber[any]](nil)
 		var count = 1000
 		var wg = &sync.WaitGroup{}
 		wg.Add(count * (count + 1) / 2)
+
+		var subers = make([]Subscriber[any], count)
+		for i := 0; i < count; i++ {
+			subers[i] = em.NewSubscriber()
+		}
 
 		var mapping = make(map[string]int)
 		var mu = &sync.Mutex{}
 		for i := 0; i < count; i++ {
 			topic := fmt.Sprintf("topic%d", i)
 			for j := 0; j < i+1; j++ {
-				em.Subscribe(Int64Subscriber(j), topic, func(subscriber Int64Subscriber, msg any) {
+				em.Subscribe(subers[j], topic, func(subscriber Subscriber[any], msg any) {
 					wg.Done()
 					mu.Lock()
 					mapping[topic]++
@@ -99,13 +104,18 @@ func TestEventEmitter_Publish(t *testing.T) {
 	})
 
 	t.Run("batch3", func(t *testing.T) {
-		var em = New[Int64Subscriber](&Config{BucketNum: 1})
+		var em = New[Subscriber[any]](&Config{BucketNum: 1})
 		var count = 1000
 		var mapping1 = make(map[string]int)
 		var mapping2 = make(map[string]int)
 		var mu = &sync.Mutex{}
 		var subjects = make(map[string]uint8)
 		var wg = &sync.WaitGroup{}
+
+		var subers = make([]Subscriber[any], count)
+		for i := 0; i < count; i++ {
+			subers[i] = em.NewSubscriber()
+		}
 
 		for i := 0; i < count; i++ {
 			var topics []string
@@ -120,7 +130,7 @@ func TestEventEmitter_Publish(t *testing.T) {
 				var topic = topics[j]
 				mapping1[topic]++
 				subjects[topic] = 1
-				em.Subscribe(Int64Subscriber(i), topic, func(subscriber Int64Subscriber, msg any) {
+				em.Subscribe(subers[i], topic, func(subscriber Subscriber[any], msg any) {
 					mu.Lock()
 					mapping2[topic]++
 					mu.Unlock()
@@ -142,15 +152,15 @@ func TestEventEmitter_Publish(t *testing.T) {
 
 func TestEventEmitter_UnSubscribe(t *testing.T) {
 	t.Run("", func(t *testing.T) {
-		var em = New[Int64Subscriber](&Config{})
+		var em = New[Subscriber[any]](&Config{})
 		var suber1 = em.NewSubscriber()
-		em.Subscribe(suber1, "topic1", func(subscriber Int64Subscriber, msg any) {
+		em.Subscribe(suber1, "topic1", func(subscriber Subscriber[any], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
-		em.Subscribe(suber1, "topic2", func(subscriber Int64Subscriber, msg any) {
+		em.Subscribe(suber1, "topic2", func(subscriber Subscriber[any], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
-		em.Subscribe(suber1, "topic3", func(subscriber Int64Subscriber, msg any) {
+		em.Subscribe(suber1, "topic3", func(subscriber Subscriber[any], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
 		assert.ElementsMatch(t, em.GetTopicsBySubscriber(suber1), []string{"topic1", "topic2", "topic3"})
@@ -164,11 +174,17 @@ func TestEventEmitter_UnSubscribe(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var em = New[Int64Subscriber](nil)
-		em.Subscribe(1, "chat", func(subscriber Int64Subscriber, msg any) {})
-		em.Subscribe(2, "chat", func(subscriber Int64Subscriber, msg any) {})
-		em.UnSubscribe(1, "chat")
-		_, exists := em.getBucket(1).Subscribers[1]
-		assert.False(t, exists)
+		var em = New[Subscriber[any]](nil)
+		var suber1 = em.NewSubscriber()
+		var suber2 = em.NewSubscriber()
+		em.Subscribe(suber1, "chat", func(subscriber Subscriber[any], msg any) {})
+		em.Subscribe(suber2, "chat", func(subscriber Subscriber[any], msg any) {})
+		em.UnSubscribe(suber1, "chat")
+		assert.Equal(t, em.CountSubscriberByTopic("chat"), 1)
+
+		topic1, _ := suber1.GetMetadata().Load(subTopic + "chat")
+		assert.Nil(t, topic1)
+		topic2, _ := suber2.GetMetadata().Load(subTopic + "chat")
+		assert.Equal(t, topic2, "chat")
 	})
 }

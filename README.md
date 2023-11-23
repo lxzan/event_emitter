@@ -27,21 +27,21 @@ import (
 )
 
 func main() {
-	var em = event_emitter.New[event_emitter.Int64Subscriber](&event_emitter.Config{
+	var em = event_emitter.New[event_emitter.Subscriber[any]](&event_emitter.Config{
 		BucketNum:  16,
 		BucketSize: 128,
 	})
 
 	var suber1 = em.NewSubscriber()
-	em.Subscribe(suber1, "greet", func(subscriber event_emitter.Int64Subscriber, msg any) {
+	em.Subscribe(suber1, "greet", func(subscriber event_emitter.Subscriber[any], msg any) {
 		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
 	})
-	em.Subscribe(suber1, "greet1", func(subscriber event_emitter.Int64Subscriber, msg any) {
+	em.Subscribe(suber1, "greet1", func(subscriber event_emitter.Subscriber[any], msg any) {
 		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
 	})
 
 	var suber2 = em.NewSubscriber()
-	em.Subscribe(suber2, "greet1", func(subscriber event_emitter.Int64Subscriber, msg any) {
+	em.Subscribe(suber2, "greet1", func(subscriber event_emitter.Subscriber[any], msg any) {
 		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
 	})
 
@@ -64,6 +64,10 @@ type Socket struct{ *gws.Conn }
 func (c *Socket) GetSubscriberID() int64 {
 	userId, _ := c.Session().Load("userId")
 	return userId.(int64)
+}
+
+func (c *Socket) GetMetadata() event_emitter.Metadata {
+	return c.Conn.Session()
 }
 
 func Sub(em *event_emitter.EventEmitter[*Socket], topic string, socket *Socket) {
