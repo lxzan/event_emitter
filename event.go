@@ -65,7 +65,7 @@ func New[T Subscriber[T]](conf *Config) *EventEmitter[T] {
 func (c *EventEmitter[T]) NewSubscriber() Subscriber[any] {
 	return &Int64Subscriber{
 		id: c.serial.Add(1),
-		md: NewMetadata(),
+		md: newSmap(),
 	}
 }
 
@@ -100,7 +100,9 @@ func (c *EventEmitter[T]) UnSubscribeAll(suber T) {
 	var topics []string
 	var md = suber.GetMetadata()
 	md.Range(func(key string, value any) bool {
-		topics = append(topics, value.(string))
+		if strings.HasPrefix(key, subTopic) {
+			topics = append(topics, value.(string))
+		}
 		return true
 	})
 	for _, topic := range topics {

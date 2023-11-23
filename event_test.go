@@ -188,3 +188,16 @@ func TestEventEmitter_UnSubscribe(t *testing.T) {
 		assert.Equal(t, topic2, "chat")
 	})
 }
+
+func TestSmap_Range(t *testing.T) {
+	var m = newSmap()
+	m.Store("1", 1)
+	m.Store("2", 2)
+
+	var values []string
+	m.Range(func(key string, value any) bool {
+		values = append(values, key)
+		return false
+	})
+	assert.ElementsMatch(t, values, []string{"1"})
+}

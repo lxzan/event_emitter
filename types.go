@@ -40,22 +40,39 @@ func (c *Int64Subscriber) GetSubscriberID() int64 {
 	return c.id
 }
 
-type smap struct{ sync.Map }
+func newSmap() *smap { return &smap{data: make(map[string]any)} }
 
-func (c *smap) Delete(key string) {
-	c.Map.Delete(key)
-}
-
-func (c *smap) Range(f func(key string, value any) bool) {
-	c.Map.Range(func(k, v any) bool { return f(k.(string), v) })
+type smap struct {
+	sync.RWMutex
+	data map[string]any
 }
 
 func (c *smap) Load(key string) (value any, exist bool) {
-	return c.Map.Load(key)
+	c.RLock()
+	defer c.RUnlock()
+	value, exist = c.data[key]
+	return
+}
+
+func (c *smap) Delete(key string) {
+	c.Lock()
+	defer c.Unlock()
+	delete(c.data, key)
 }
 
 func (c *smap) Store(key string, value any) {
-	c.Map.Store(key, value)
+	c.Lock()
+	defer c.Unlock()
+	c.data[key] = value
 }
 
-func NewMetadata() Metadata { return new(smap) }
+func (c *smap) Range(f func(key string, value any) bool) {
+	c.RLock()
+	defer c.RUnlock()
+
+	for k, v := range c.data {
+		if !f(k, v) {
+			return
+		}
+	}
+}
