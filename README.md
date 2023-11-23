@@ -1,21 +1,26 @@
 # EventEmitter
 
-### Simple, Fast and Thread-safe event Pub/Sub library for Golang.
+### Simple, Fast and Thread-Safe Event Pub/Sub Library for Golang
 
 [![Build Status][1]][2] [![codecov][3]][4]
 
 [1]: https://github.com/lxzan/event_emitter/actions/workflows/go.yml/badge.svg
+
 [2]: https://github.com/lxzan/event_emitter/actions/workflows/go.yml
+
 [3]: https://codecov.io/gh/lxzan/event_emitter/graph/badge.svg?token=WnGHinZwVR
+
 [4]: https://codecov.io/gh/lxzan/event_emitter
 
 ### Introduction
 
-Event emitter is a simple, fast and thread-safe event Pub/Sub library for Golang. Like RabbitMQ, it uses the topic to publish and subscribe messages. It supports multiple subscribers and multiple topics.
+EventEmitter is a simple, fast and thread-safe event Pub/Sub library for Golang.
 
-Event emitter only supports in memory storage, and does not support persistence, so it is not suitable for scenarios that require persistence. It can only be used in the application itself, does not support distribution, if you need distribution, please use RabittMQ, Kafka etc.
+EventEmitter only supports in memory storage, and does not support persistence, so it is not suitable for scenarios that
+require persistence. It can only be used in the application itself, does not support distribution, if you need
+distribution, please use RabittMQ, Kafka etc.
 
-Event emitter designed for scenarios that require high concurrency and high performance.
+EventEmitter designed for scenarios that require high concurrency and high performance.
 
 ## Install
 
@@ -25,7 +30,8 @@ go get -v github.com/lxzan/event_emitter@latest
 
 ### Quick Start
 
-It very easy to use, just create a event emitter, then subscribe and publish messages. It can be used in any place of your application.
+It very easy to use, just create a event emitter, then subscribe and publish messages. It can be used in any place of
+your application.
 
 **The following is a simple example.**
 
@@ -40,8 +46,8 @@ import (
 func main() {
 	// create a event emitter
 	var em = event_emitter.New[event_emitter.Subscriber[any]](&event_emitter.Config{
-		BucketNum:  16,  // 16 buckets
-		BucketSize: 128, // 128 subscribers per bucket
+		BucketNum:  16,
+		BucketSize: 128,
 	})
 
 	// create a subscriber
@@ -74,9 +80,12 @@ func main() {
 
 #### GWS Broadcast
 
-Use the event_emitter package to implement the publish-subscribe model. Wrap gws.Conn in a structure and implement the GetSubscriberID method to get the subscription ID, which must be unique. The subscription ID is used to identify the subscriber, who can only receive messages on the subject of his subscription.
+Use the event_emitter package to implement the publish-subscribe model. Wrap gws.Conn in a structure and implement the
+GetSubscriberID method to get the subscription ID, which must be unique. The subscription ID is used to identify the
+subscriber, who can only receive messages on the subject of his subscription.
 
-This example is useful for building chat rooms or push messages using gws. This means that a user can subscribe to one or more topics via websocket, and when a message is posted to that topic, all subscribers will receive the message.
+This example is useful for building chat rooms or push messages using gws. This means that a user can subscribe to one
+or more topics via websocket, and when a message is posted to that topic, all subscribers will receive the message.
 
 ```go
 package main

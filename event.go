@@ -14,8 +14,8 @@ type Config struct {
 	// Number of slices
 	BucketNum int64
 
-	// 每个分片的初始化容量, 根据主题订阅量估算, 默认为0.
-	// Initialization capacity of each slice, estimated from subscriptions, default 0.
+	// 每个分片里主题表的初始化容量, 根据主题订阅量估算, 默认为0.
+	// The initialization capacity of the topic table in each slice is estimated based on the topic subscriptions and is 0 by default.
 	BucketSize int64
 }
 
