@@ -76,6 +76,30 @@ func main() {
 
 ```
 
+### Wildcard
+
+```go
+package main
+
+import (
+	"github.com/lxzan/event_emitter"
+)
+
+func main() {
+	var em = event_emitter.New[event_emitter.Subscriber[any]](nil)
+	em.Subscribe(em.NewSubscriber(), "coin.btc.usdt.1m", func(subscriber event_emitter.Subscriber[any], msg any) {
+		println("coin.btc.usdt.1m")
+	})
+	em.Subscribe(em.NewSubscriber(), "coin.btc.usdt.1h", func(subscriber event_emitter.Subscriber[any], msg any) {
+		println("coin.btc.usdt.1h")
+	})
+	em.Subscribe(em.NewSubscriber(), "coin.eth.usdt.1m", func(subscriber event_emitter.Subscriber[any], msg any) {
+		println("coin.eth.usdt.1m")
+	})
+	em.Publish("coin.*.usdt.*", nil)
+}
+```
+
 ### More Examples
 
 #### GWS Broadcast
@@ -95,20 +119,18 @@ import (
 	"github.com/lxzan/gws"
 )
 
-type Socket struct{ *gws.Conn }
+type Socket gws.Conn
 
 func (c *Socket) GetSubscriberID() int64 {
-	userId, _ := c.Session().Load("userId")
+	userId, _ := c.GetMetadata().Load("userId")
 	return userId.(int64)
 }
 
-func (c *Socket) GetMetadata() event_emitter.Metadata {
-	return c.Conn.Session()
-}
+func (c *Socket) GetMetadata() event_emitter.Metadata { return (*gws.Conn)(c).Session() }
 
-func Sub(em *event_emitter.EventEmitter[*Socket], topic string, socket *Socket) {
+func Sub(em *event_emitter.EventEmitter[*Socket], socket *Socket, topic string) {
 	em.Subscribe(socket, topic, func(subscriber *Socket, msg any) {
-		_ = msg.(*gws.Broadcaster).Broadcast(subscriber.Conn)
+		_ = msg.(*gws.Broadcaster).Broadcast((*gws.Conn)(subscriber))
 	})
 }
 

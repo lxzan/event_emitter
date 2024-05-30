@@ -148,6 +148,29 @@ func TestEventEmitter_Publish(t *testing.T) {
 			assert.Equal(t, mapping1[k], mapping2[k])
 		}
 	})
+
+	t.Run("*", func(t *testing.T) {
+		var em = New[Subscriber[any]](&Config{Separator: "-"})
+		var sum = 0
+		em.Subscribe(em.NewSubscriber(), "hello-lee", func(subscriber Subscriber[any], msg any) {
+			sum += 1
+		})
+		em.Subscribe(em.NewSubscriber(), "hello-linda", func(subscriber Subscriber[any], msg any) {
+			sum += 2
+		})
+
+		sum = 0
+		em.Publish("hello-*", nil)
+		assert.Equal(t, sum, 3)
+
+		sum = 0
+		em.Publish("hello-oh", nil)
+		assert.Equal(t, sum, 0)
+
+		sum = 0
+		em.Publish("hello-lee", nil)
+		assert.Equal(t, sum, 1)
+	})
 }
 
 func TestEventEmitter_UnSubscribe(t *testing.T) {
@@ -194,10 +217,21 @@ func TestSmap_Range(t *testing.T) {
 	m.Store("1", 1)
 	m.Store("2", 2)
 
-	var values []string
-	m.Range(func(key string, value any) bool {
-		values = append(values, key)
-		return false
+	t.Run("", func(t *testing.T) {
+		var values []string
+		m.Range(func(key string, value any) bool {
+			values = append(values, key)
+			return true
+		})
+		assert.ElementsMatch(t, values, []string{"1", "2"})
 	})
-	assert.ElementsMatch(t, values, []string{"1"})
+
+	t.Run("", func(t *testing.T) {
+		var values []string
+		m.Range(func(key string, value any) bool {
+			values = append(values, key)
+			return false
+		})
+		assert.Equal(t, len(values), 1)
+	})
 }

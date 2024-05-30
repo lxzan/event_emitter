@@ -1,6 +1,7 @@
 package event_emitter
 
 import (
+	"github.com/lxzan/event_emitter/internal/treemap"
 	"hash/maphash"
 	"strings"
 	"sync"
@@ -17,6 +18,10 @@ type Config struct {
 	// 每个分片里主题表的初始化容量, 根据主题订阅量估算, 默认为0.
 	// The initialization capacity of the topic table in each slice is estimated based on the topic subscriptions and is 0 by default.
 	BucketSize int64
+
+	// 订阅主题分隔符, 默认为点
+	// Subscription subject separator, defaults to a dot.
+	Separator string
 }
 
 func (c *Config) init() {
@@ -25,6 +30,9 @@ func (c *Config) init() {
 	}
 	if c.BucketSize <= 0 {
 		c.BucketSize = 0
+	}
+	if c.Separator == "" {
+		c.Separator = "."
 	}
 	c.BucketNum = toBinaryNumber(c.BucketNum)
 }
@@ -49,7 +57,7 @@ func New[T Subscriber[T]](conf *Config) *EventEmitter[T] {
 		buckets = append(buckets, &bucket[T]{
 			Mutex:  sync.Mutex{},
 			Size:   conf.BucketSize,
-			Topics: make(map[string]*topicField[T]),
+			Topics: treemap.New[*topicField[T]](conf.Separator),
 		})
 	}
 
@@ -74,10 +82,18 @@ func (c *EventEmitter[T]) getBucket(topic string) *bucket[T] {
 	return c.buckets[i]
 }
 
-// Publish 向主题发布消息
-// Publish a message to the topic
+// Publish 发布消息到指定主题, 支持通配符匹配.
+// 注意: 如果主题包含有分隔符, 会扫描所有分片.
+// Post a message to the topic, support wildcard matching.
+// Note: If the topic contains a separator, all slices will be scanned.
 func (c *EventEmitter[T]) Publish(topic string, msg any) {
-	c.getBucket(topic).publish(topic, msg)
+	if strings.Contains(topic, c.conf.Separator) {
+		for _, b := range c.buckets {
+			b.publish(topic, msg)
+		}
+	} else {
+		c.getBucket(topic).publish(topic, msg)
+	}
 }
 
 // Subscribe 订阅主题消息. 注意: 回调函数必须是非阻塞的.
@@ -133,7 +149,7 @@ func (c *EventEmitter[T]) CountSubscriberByTopic(topic string) int {
 type bucket[T Subscriber[T]] struct {
 	sync.Mutex
 	Size   int64
-	Topics map[string]*topicField[T]
+	Topics *treemap.TreeMap[*topicField[T]]
 }
 
 // 新增订阅
@@ -144,28 +160,24 @@ func (c *bucket[T]) subscribe(suber T, topic string, f eventCallback[T]) {
 	subId := suber.GetSubscriberID()
 	ele := topicElement[T]{suber: suber, cb: f}
 
-	t, ok := c.Topics[topic]
-	if !ok {
+	if t, ok := c.Topics.Get(topic); ok {
+		t.subers[subId] = ele
+	} else {
 		t = &topicField[T]{subers: make(map[int64]topicElement[T], c.Size)}
 		t.subers[subId] = ele
-		c.Topics[topic] = t
-		return
+		c.Topics.Put(topic, t)
 	}
-
-	t.subers[subId] = ele
 }
 
 func (c *bucket[T]) publish(topic string, msg any) {
 	c.Lock()
 	defer c.Unlock()
 
-	t, ok := c.Topics[topic]
-	if !ok {
-		return
-	}
-	for _, v := range t.subers {
-		v.cb(v.suber, msg)
-	}
+	c.Topics.Match(topic, func(_ string, t *topicField[T]) {
+		for _, v := range t.subers {
+			v.cb(v.suber, msg)
+		}
+	})
 }
 
 // 取消某个主题的订阅
@@ -173,7 +185,7 @@ func (c *bucket[T]) unSubscribe(suber T, topic string) {
 	c.Lock()
 	defer c.Unlock()
 
-	v, ok := c.Topics[topic]
+	v, ok := c.Topics.Get(topic)
 	if ok {
 		delete(v.subers, suber.GetSubscriberID())
 	}
@@ -183,7 +195,7 @@ func (c *bucket[T]) countTopicSubscriber(topic string) int {
 	c.Lock()
 	defer c.Unlock()
 
-	v, exists := c.Topics[topic]
+	v, exists := c.Topics.Get(topic)
 	if !exists {
 		return 0
 	}

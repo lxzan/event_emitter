@@ -24,6 +24,12 @@ var (
 		r:      rand.New(rand.NewSource(time.Now().UnixNano())),
 		mu:     sync.Mutex{},
 	}
+
+	A2F = &RandomString{
+		layout: "ABCDEF",
+		r:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		mu:     sync.Mutex{},
+	}
 )
 
 func (c *RandomString) Generate(n int) []byte {
