@@ -1,7 +1,6 @@
 package treemap
 
 import (
-	"github.com/lxzan/event_emitter/internal/helper"
 	"strings"
 )
 
@@ -19,34 +18,29 @@ type TreeMap[T any] struct {
 func (c *TreeMap[T]) Put(key string, val T) {
 	if !strings.Contains(key, c.sep) {
 		c.children[key] = &TreeMap[T]{key: key, value: val}
-		return
+	} else {
+		c.doPut(c, &TreeMap[T]{key: key, value: val}, key)
 	}
-
-	var list = helper.Split(key, c.sep)
-	if len(list) == 0 {
-		return
-	}
-	c.doPut(c, 0, list, key, val)
 }
 
-func (c *TreeMap[T]) doPut(node *TreeMap[T], index int, list []string, key string, val T) {
-	var segment = list[index]
-	if node.children == nil {
-		node.children = make(map[string]*TreeMap[T])
+func (c *TreeMap[T]) doPut(far, son *TreeMap[T], key string) {
+	if far.children == nil {
+		far.children = make(map[string]*TreeMap[T])
 	}
 
-	var next = node.children[segment]
-	if node.children[segment] == nil {
+	index := strings.Index(key, c.sep)
+	if index < 0 {
+		far.children[key] = son
+		return
+	}
+
+	s0, s1 := key[:index], key[index+1:]
+	next := far.children[s0]
+	if far.children[s0] == nil {
 		next = &TreeMap[T]{}
-		node.children[segment] = next
+		far.children[s0] = next
 	}
-
-	if index+1 == len(list) {
-		next.key = key
-		next.value = val
-	} else {
-		c.doPut(next, index+1, list, key, val)
-	}
+	c.doPut(next, son, s1)
 }
 
 func (c *TreeMap[T]) Get(key string) (v T, exist bool) {
