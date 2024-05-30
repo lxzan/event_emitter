@@ -5,25 +5,27 @@ import (
 	"github.com/lxzan/event_emitter/internal/helper"
 	"github.com/stretchr/testify/assert"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
 
 func TestEventEmitter_Publish(t *testing.T) {
 	t.Run("ok", func(t *testing.T) {
-		var em = New[Subscriber[any]](nil)
+		var em = New[int64, Subscriber[int64]](nil)
 		var wg = &sync.WaitGroup{}
+		var serial = atomic.Int64{}
 		wg.Add(2)
 
-		suber1 := em.NewSubscriber()
-		em.Subscribe(suber1, "test", func(subscriber Subscriber[any], msg any) {
+		suber1 := em.NewSubscriber(serial.Add(1))
+		em.Subscribe(suber1, "test", func(subscriber Subscriber[int64], msg any) {
 			t.Logf("id=%d, msg=%v\n", suber1, msg)
 			wg.Done()
 		})
-		em.Subscribe(suber1, "oh", func(subscriber Subscriber[any], msg any) {})
+		em.Subscribe(suber1, "oh", func(subscriber Subscriber[int64], msg any) {})
 
-		suber2 := em.NewSubscriber()
-		em.Subscribe(suber2, "test", func(subscriber Subscriber[any], msg any) {
+		suber2 := em.NewSubscriber(serial.Add(1))
+		em.Subscribe(suber2, "test", func(subscriber Subscriber[int64], msg any) {
 			t.Logf("id=%d, msg=%v\n", suber2, msg)
 			wg.Done()
 		})
@@ -37,12 +39,13 @@ func TestEventEmitter_Publish(t *testing.T) {
 	})
 
 	t.Run("timeout", func(t *testing.T) {
-		var em = New[Subscriber[any]](&Config{})
-		var suber1 = em.NewSubscriber()
-		em.Subscribe(suber1, "topic1", func(subscriber Subscriber[any], msg any) {
+		var serial = atomic.Int64{}
+		var em = New[int64, Subscriber[int64]](&Config{})
+		var suber1 = em.NewSubscriber(serial.Add(1))
+		em.Subscribe(suber1, "topic1", func(subscriber Subscriber[int64], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
-		em.Subscribe(suber1, "topic2", func(subscriber Subscriber[any], msg any) {
+		em.Subscribe(suber1, "topic2", func(subscriber Subscriber[int64], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
 
@@ -52,13 +55,14 @@ func TestEventEmitter_Publish(t *testing.T) {
 	})
 
 	t.Run("batch1", func(t *testing.T) {
-		var em = New[Subscriber[any]](nil)
+		var serial = atomic.Int64{}
+		var em = New[int64, Subscriber[int64]](nil)
 		var count = 1000
 		var wg = &sync.WaitGroup{}
 		wg.Add(count)
 		for i := 0; i < count; i++ {
-			id := em.NewSubscriber()
-			em.Subscribe(id, "greet", func(subscriber Subscriber[any], msg any) {
+			id := em.NewSubscriber(serial.Add(1))
+			em.Subscribe(id, "greet", func(subscriber Subscriber[int64], msg any) {
 				wg.Done()
 			})
 		}
@@ -67,14 +71,15 @@ func TestEventEmitter_Publish(t *testing.T) {
 	})
 
 	t.Run("batch2", func(t *testing.T) {
-		var em = New[Subscriber[any]](nil)
+		var serial = atomic.Int64{}
+		var em = New[int64, Subscriber[int64]](nil)
 		var count = 1000
 		var wg = &sync.WaitGroup{}
 		wg.Add(count * (count + 1) / 2)
 
-		var subers = make([]Subscriber[any], count)
+		var subers = make([]Subscriber[int64], count)
 		for i := 0; i < count; i++ {
-			subers[i] = em.NewSubscriber()
+			subers[i] = em.NewSubscriber(serial.Add(1))
 		}
 
 		var mapping = make(map[string]int)
@@ -82,7 +87,7 @@ func TestEventEmitter_Publish(t *testing.T) {
 		for i := 0; i < count; i++ {
 			topic := fmt.Sprintf("topic%d", i)
 			for j := 0; j < i+1; j++ {
-				em.Subscribe(subers[j], topic, func(subscriber Subscriber[any], msg any) {
+				em.Subscribe(subers[j], topic, func(subscriber Subscriber[int64], msg any) {
 					wg.Done()
 					mu.Lock()
 					mapping[topic]++
@@ -104,7 +109,8 @@ func TestEventEmitter_Publish(t *testing.T) {
 	})
 
 	t.Run("batch3", func(t *testing.T) {
-		var em = New[Subscriber[any]](&Config{BucketNum: 1})
+		var serial = atomic.Int64{}
+		var em = New[int64, Subscriber[int64]](&Config{BucketNum: 1})
 		var count = 1000
 		var mapping1 = make(map[string]int)
 		var mapping2 = make(map[string]int)
@@ -112,9 +118,9 @@ func TestEventEmitter_Publish(t *testing.T) {
 		var subjects = make(map[string]uint8)
 		var wg = &sync.WaitGroup{}
 
-		var subers = make([]Subscriber[any], count)
+		var subers = make([]Subscriber[int64], count)
 		for i := 0; i < count; i++ {
-			subers[i] = em.NewSubscriber()
+			subers[i] = em.NewSubscriber(serial.Add(1))
 		}
 
 		for i := 0; i < count; i++ {
@@ -130,7 +136,7 @@ func TestEventEmitter_Publish(t *testing.T) {
 				var topic = topics[j]
 				mapping1[topic]++
 				subjects[topic] = 1
-				em.Subscribe(subers[i], topic, func(subscriber Subscriber[any], msg any) {
+				em.Subscribe(subers[i], topic, func(subscriber Subscriber[int64], msg any) {
 					mu.Lock()
 					mapping2[topic]++
 					mu.Unlock()
@@ -148,19 +154,44 @@ func TestEventEmitter_Publish(t *testing.T) {
 			assert.Equal(t, mapping1[k], mapping2[k])
 		}
 	})
+
+	t.Run("*", func(t *testing.T) {
+		var serial = atomic.Int64{}
+		var em = New[int64, Subscriber[int64]](&Config{Separator: "-"})
+		var sum = 0
+		em.Subscribe(em.NewSubscriber(serial.Add(1)), "hello-lee", func(subscriber Subscriber[int64], msg any) {
+			sum += 1
+		})
+		em.Subscribe(em.NewSubscriber(serial.Add(1)), "hello-linda", func(subscriber Subscriber[int64], msg any) {
+			sum += 2
+		})
+
+		sum = 0
+		em.Publish("hello-*", nil)
+		assert.Equal(t, sum, 3)
+
+		sum = 0
+		em.Publish("hello-oh", nil)
+		assert.Equal(t, sum, 0)
+
+		sum = 0
+		em.Publish("hello-lee", nil)
+		assert.Equal(t, sum, 1)
+	})
 }
 
 func TestEventEmitter_UnSubscribe(t *testing.T) {
 	t.Run("", func(t *testing.T) {
-		var em = New[Subscriber[any]](&Config{})
-		var suber1 = em.NewSubscriber()
-		em.Subscribe(suber1, "topic1", func(subscriber Subscriber[any], msg any) {
+		var serial = atomic.Int64{}
+		var em = New[int64, Subscriber[int64]](&Config{})
+		var suber1 = em.NewSubscriber(serial.Add(1))
+		em.Subscribe(suber1, "topic1", func(subscriber Subscriber[int64], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
-		em.Subscribe(suber1, "topic2", func(subscriber Subscriber[any], msg any) {
+		em.Subscribe(suber1, "topic2", func(subscriber Subscriber[int64], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
-		em.Subscribe(suber1, "topic3", func(subscriber Subscriber[any], msg any) {
+		em.Subscribe(suber1, "topic3", func(subscriber Subscriber[int64], msg any) {
 			time.Sleep(100 * time.Millisecond)
 		})
 		assert.ElementsMatch(t, em.GetTopicsBySubscriber(suber1), []string{"topic1", "topic2", "topic3"})
@@ -174,11 +205,12 @@ func TestEventEmitter_UnSubscribe(t *testing.T) {
 	})
 
 	t.Run("", func(t *testing.T) {
-		var em = New[Subscriber[any]](nil)
-		var suber1 = em.NewSubscriber()
-		var suber2 = em.NewSubscriber()
-		em.Subscribe(suber1, "chat", func(subscriber Subscriber[any], msg any) {})
-		em.Subscribe(suber2, "chat", func(subscriber Subscriber[any], msg any) {})
+		var serial = atomic.Int64{}
+		var em = New[int64, Subscriber[int64]](nil)
+		var suber1 = em.NewSubscriber(serial.Add(1))
+		var suber2 = em.NewSubscriber(serial.Add(1))
+		em.Subscribe(suber1, "chat", func(subscriber Subscriber[int64], msg any) {})
+		em.Subscribe(suber2, "chat", func(subscriber Subscriber[int64], msg any) {})
 		em.UnSubscribe(suber1, "chat")
 		assert.Equal(t, em.CountSubscriberByTopic("chat"), 1)
 
@@ -194,10 +226,21 @@ func TestSmap_Range(t *testing.T) {
 	m.Store("1", 1)
 	m.Store("2", 2)
 
-	var values []string
-	m.Range(func(key string, value any) bool {
-		values = append(values, key)
-		return false
+	t.Run("", func(t *testing.T) {
+		var values []string
+		m.Range(func(key string, value any) bool {
+			values = append(values, key)
+			return true
+		})
+		assert.ElementsMatch(t, values, []string{"1", "2"})
 	})
-	assert.ElementsMatch(t, values, []string{"1"})
+
+	t.Run("", func(t *testing.T) {
+		var values []string
+		m.Range(func(key string, value any) bool {
+			values = append(values, key)
+			return false
+		})
+		assert.Equal(t, len(values), 1)
+	})
 }
