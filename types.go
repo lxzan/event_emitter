@@ -2,20 +2,25 @@ package event_emitter
 
 import "sync"
 
-type eventCallback[T Subscriber[T]] func(suber T, msg any)
+type eventCallback[T comparable, S Subscriber[T]] func(suber S, msg any)
 
-type topicField[T Subscriber[T]] struct {
-	subers map[int64]topicElement[T]
+type topicField[T comparable, S Subscriber[T]] struct {
+	subers map[T]topicElement[T, S]
 }
 
-type topicElement[T Subscriber[T]] struct {
-	suber T
-	cb    eventCallback[T]
+type topicElement[T comparable, S Subscriber[T]] struct {
+	suber S
+	cb    eventCallback[T, S]
 }
 
 type (
-	Subscriber[T any] interface {
-		GetSubscriberID() int64 // 获取订阅者唯一ID
+	Subscriber[T comparable] interface {
+		// GetSubscriberID 获取订阅者唯一ID
+		// Get subscriber unique ID
+		GetSubscriberID() T
+
+		// GetMetadata 获取元数据
+		// Getting Metadata
 		GetMetadata() Metadata
 	}
 
@@ -27,18 +32,14 @@ type (
 	}
 )
 
-type Int64Subscriber struct {
-	id int64
+type subscriber[T comparable] struct {
+	id T
 	md Metadata
 }
 
-func (c *Int64Subscriber) GetMetadata() Metadata {
-	return c.md
-}
+func (c *subscriber[T]) GetMetadata() Metadata { return c.md }
 
-func (c *Int64Subscriber) GetSubscriberID() int64 {
-	return c.id
-}
+func (c *subscriber[T]) GetSubscriberID() T { return c.id }
 
 func newSmap() *smap { return &smap{data: make(map[string]any)} }
 
