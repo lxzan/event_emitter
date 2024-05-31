@@ -5,6 +5,7 @@ import (
 	"github.com/lxzan/event_emitter/internal/helper"
 	"github.com/stretchr/testify/assert"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -80,4 +81,27 @@ func TestTreeMap_Get(t *testing.T) {
 	assert.Equal(t, v, 2)
 	_, ok := tm.Get("~aha")
 	assert.False(t, ok)
+}
+
+func TestTreeMap_Match(t *testing.T) {
+	var tm = New[uint8](".")
+	tm.Put("api.v1.actions.eat", 1)
+	tm.Put("api.v1.actions", 2)
+	var wg = new(sync.WaitGroup)
+	wg.Add(2)
+	var sum = uint8(0)
+	tm.Match("api.v1.*.eat", func(k string, v uint8) {
+		sum += v
+		wg.Done()
+	})
+	tm.Match("api.v1.*", func(k string, v uint8) {
+		sum += v
+		wg.Done()
+	})
+	tm.Match("api.v1.any", func(k string, v uint8) {
+		sum += v
+		wg.Done()
+	})
+	wg.Wait()
+	assert.Equal(t, sum, uint8(3))
 }
