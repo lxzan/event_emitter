@@ -57,51 +57,24 @@ func main() {
 	var suber1 = em.NewSubscriber(increaser.Add(1))
 
 	// subscribe topic "greet"
-	em.Subscribe(suber1, "greet", func(subscriber event_emitter.Subscriber[int64], msg any) {
-		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
+	em.Subscribe(suber1, "greet", func(msg any) {
+		fmt.Printf("recv: sub_id=%d, msg=%v\n", suber1.GetSubscriberID(), msg)
 	})
 	// subscribe topic "greet1"
-	em.Subscribe(suber1, "greet1", func(subscriber event_emitter.Subscriber[int64], msg any) {
-		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
+	em.Subscribe(suber1, "greet1", func(msg any) {
+		fmt.Printf("recv: sub_id=%d, msg=%v\n", suber1.GetSubscriberID(), msg)
 	})
 
 	// create another subscriber
 	var suber2 = em.NewSubscriber(increaser.Add(1))
 
 	// subscribe topic "greet1"
-	em.Subscribe(suber2, "greet1", func(subscriber event_emitter.Subscriber[int64], msg any) {
-		fmt.Printf("recv: sub_id=%d, msg=%v\n", subscriber.GetSubscriberID(), msg)
+	em.Subscribe(suber2, "greet1", func(msg any) {
+		fmt.Printf("recv: sub_id=%d, msg=%v\n", suber2.GetSubscriberID(), msg)
 	})
 
 	// publish message to topic "greet"
 	em.Publish("greet1", "hello!")
-}
-
-```
-
-### Wildcard
-
-```go
-package main
-
-import (
-	"github.com/lxzan/event_emitter"
-	"sync/atomic"
-)
-
-func main() {
-	var em = event_emitter.New[int64, event_emitter.Subscriber[int64]](nil)
-	var increaser = new(atomic.Int64)
-	em.Subscribe(em.NewSubscriber(increaser.Add(1)), "coin.btc.usdt.1m", func(subscriber event_emitter.Subscriber[int64], msg any) {
-		println("coin.btc.usdt.1m")
-	})
-	em.Subscribe(em.NewSubscriber(increaser.Add(1)), "coin.btc.usdt.1h", func(subscriber event_emitter.Subscriber[int64], msg any) {
-		println("coin.btc.usdt.1h")
-	})
-	em.Subscribe(em.NewSubscriber(increaser.Add(1)), "coin.eth.usdt.1m", func(subscriber event_emitter.Subscriber[int64], msg any) {
-		println("coin.eth.usdt.1m")
-	})
-	em.Publish("coin.*.usdt.*", nil)
 }
 
 ```
@@ -125,27 +98,27 @@ import (
 	"github.com/lxzan/gws"
 )
 
-type Socket gws.Conn
+type Subscriber gws.Conn
 
-func NewSocket(conn *gws.Conn) *Socket { return (*Socket)(conn) }
+func NewSubscriber(conn *gws.Conn) *Subscriber { return (*Subscriber)(conn) }
 
-func (c *Socket) GetSubscriberID() int64 {
+func (c *Subscriber) GetSubscriberID() int64 {
 	userId, _ := c.GetMetadata().Load("userId")
 	return userId.(int64)
 }
 
-func (c *Socket) GetMetadata() event_emitter.Metadata { return c.Conn().Session() }
+func (c *Subscriber) GetMetadata() event_emitter.Metadata { return c.Conn().Session() }
 
-func (c *Socket) Conn() *gws.Conn { return (*gws.Conn)(c) }
+func (c *Subscriber) Conn() *gws.Conn { return (*gws.Conn)(c) }
 
-func Sub(em *event_emitter.EventEmitter[int64, *Socket], socket *Socket, topic string) {
-	em.Subscribe(socket, topic, func(subscriber *Socket, msg any) {
-		_ = msg.(*gws.Broadcaster).Broadcast(subscriber.Conn())
+func Subscribe(em *event_emitter.EventEmitter[int64, *Subscriber], s *Subscriber, topic string) {
+	em.Subscribe(s, topic, func(msg any) {
+		_ = msg.(*gws.Broadcaster).Broadcast(s.Conn())
 	})
 }
 
-func Pub(em *event_emitter.EventEmitter[int64, *Socket], topic string, op gws.Opcode, msg []byte) {
-	var broadcaster = gws.NewBroadcaster(op, msg)
+func Publish(em *event_emitter.EventEmitter[int64, *Subscriber], topic string, msg []byte) {
+	var broadcaster = gws.NewBroadcaster(gws.OpcodeText, msg)
 	defer broadcaster.Close()
 	em.Publish(topic, broadcaster)
 }
