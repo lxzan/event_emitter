@@ -2,15 +2,15 @@ package event_emitter
 
 import "sync"
 
-type eventCallback[T comparable, S Subscriber[T]] func(suber S, msg any)
+type eventCallback func(msg any)
 
 type topicField[T comparable, S Subscriber[T]] struct {
-	subers map[T]topicElement[T, S]
+	subers map[T]topicElement[S]
 }
 
-type topicElement[T comparable, S Subscriber[T]] struct {
+type topicElement[S any] struct {
 	suber S
-	cb    eventCallback[T, S]
+	cb    eventCallback
 }
 
 type (
